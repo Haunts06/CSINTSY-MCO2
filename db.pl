@@ -38,6 +38,9 @@ relative(X, Y, Visited) :-
 
 parent(X, Y) :- father(X, Y).
 parent(X, Y) :- mother(X, Y).
+parent(X, Y) :- father(X, Y), male(X).
+parent(X, Y) :- mother(X, Y), female(X).
+
 
 % Children and gendered children (only derive from parent facts)
 child(X, Y)    :- parent(Y, X).
@@ -66,8 +69,8 @@ related_sibling(X, Y, Visited) :-
 
 % Grandparents
 grandparent(X, Y) :- parent(X, Z), parent(Z, Y).
-grandfather(X, Y) :- grandparent(X, Y).
-grandmother(X, Y) :- grandparent(X, Y).
+grandfather(X, Y) :- grandparent(X, Y), male(X).
+grandmother(X, Y) :- grandparent(X, Y), female(X).
 
 % Aunt/Uncle
 aunt(X, Y)     :- sister(X, Z), parent(Z, Y).

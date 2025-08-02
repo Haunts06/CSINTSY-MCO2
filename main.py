@@ -44,21 +44,23 @@ def contradicts(fact_type, a, b):
     return False
 
 
-def add_fact(fact_type, a, b, extras=[]):
-    a, b = format(a), format(b)
-    if contradicts(fact_type, a, b):
+def add_fact(fact_type, a, b=None):
+    a = format(a)
+    if b is not None:
+        b = format(b)
+    
+    # Skip contradiction check for gender
+    if b and contradicts(fact_type, a, b):
         print(f"Contradiction: {b} cannot be the {fact_type} of {a}.")
         return
     
-    base_fact = f"{fact_type}({a},{b})"
+    base_fact = f"{fact_type}({a})" if b is None else f"{fact_type}({a},{b})"
+    
     if fact_exists(base_fact):
         print("Already known.")
         return
     
     prolog.assertz(base_fact)
-    for ef in extras:
-        prolog.assertz(ef)
-
     print(f"Learned: {base_fact}")
 
 
@@ -73,23 +75,23 @@ def handle_statement(text):
 
         elif "is a sister of" in text:
             a, b = words[0], words[-1]
-            add_fact("sibling_fact", a, b, [f"female({format(a)})"])
+            add_fact("sibling_fact", a, b)
+            add_fact("female", a)
 
         elif "is a brother of" in text:
             a, b = words[0], words[-1]
-            add_fact("sibling_fact", a, b, [f"male({format(a)})"])
+            add_fact("sibling_fact", a, b)
+            add_fact("male", a)
 
         elif " is the father of " in text:
-            parts = text.split(" is the father of ")
-            if len(parts) == 2:
-                a, b = format(parts[0]), format(parts[1])
-                add_fact("parent", a, b, [f"father({format(a)},{format(b)})"])
+            a, b = words[0], words[-1]
+            add_fact("parent", a, b)
+            add_fact("male", a)
 
         elif " is the mother of " in text:
-            parts = text.split(" is the mother of ")
-            if len(parts) == 2:
-                a, b = format(parts[0]), format(parts[1])
-                add_fact("parent", a, b, [f"mother({format(a)},{format(b)})"])
+            a, b = words[0], words[-1]
+            add_fact("parent", a, b)
+            add_fact("female", a)
 
         elif "are the parents of" in text:
             a, b, c = words[0], words[2], words[-1]
@@ -98,11 +100,15 @@ def handle_statement(text):
 
         elif "is a grandfather of" in text:
             a, b = words[0], words[-1]
-            add_fact("grandfather", a, b, [f"grandparent({format(a)},{format(b)})"])
+            add_fact("grandparent", a, b)
+            add_fact("grandfather", a, b)
+            add_fact("male", a)
 
         elif "is a grandmother of" in text:
             a, b = words[0], words[-1]
-            add_fact("grandmother", a, b, [f"grandparent({format(a)},{format(b)})"])
+            add_fact("grandparent", a, b)
+            add_fact("grandmother", a, b)
+            add_fact("female", a)
 
         elif "are children of" in text:
             a, b, c = words[0], words[2], words[-1]
@@ -111,24 +117,32 @@ def handle_statement(text):
 
         elif "is a daughter of" in text:
             a, b = words[0], words[-1]
-            add_fact("daughter", a, b, [f"child({format(a)},{format(b)})",f"female({format(a)})"])
+            add_fact("daughter", a, b)
+            add_fact("child", a, b)
+            add_fact("female", a)
 
         elif "is a son of" in text:
             a, b = words[0], words[-1]
-            add_fact("son", a, b, [f"child({format(a)},{format(b)})", f"male({format(a)})"])
+            add_fact("son", a, b)
+            add_fact("child", a, b)
+            add_fact("male", a)
 
         elif "is an aunt of" in text:
             a, b = words[0], words[-1]
-            add_fact("aunt", a, b, [f"female({format(a)})"])
+            add_fact("aunt", a, b)
+            add_fact("female", a)
 
         elif "is an uncle of" in text:
             a, b = words[0], words[-1]
-            add_fact("uncle", a, b, [f"male({format(a)})"])
+            add_fact("uncle", a, b)
+            add_fact("male", a)
 
         else:
             print("Statement invalid.")
-    except:
-        print("Could not parse statement. Please use the correct format.")
+
+    except Exception as e:
+        print(f"Error processing statement: {e}")
+        # print("Could not parse statement. Please use the correct format.")
 
 def conflicting_gender(name):
     return fact_exists(f"male({name})") and fact_exists(f"female({name})")
