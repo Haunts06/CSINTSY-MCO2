@@ -1,5 +1,4 @@
-:- dynamic relative/2, male/1, female/1, parent/2, father/2, 
-           mother/2, sibling_fact/2, child/2, brother/2, 
+:- dynamic relative/2, male/1, female/1, parent/2, sibling_fact/2, child/2, brother/2, 
            sister/2, aunt/2, uncle/2, grandparent/2, 
            grandfather/2, grandmother/2, son/2, daughter/2.
 
@@ -36,11 +35,10 @@ relative(X, Y, Visited) :-
     ),
     relative(Z, Y, [(X, Y) | Visited]).
 
-parent(X, Y) :- father(X, Y).
-parent(X, Y) :- mother(X, Y).
-parent(X, Y) :- father(X, Y), male(X).
-parent(X, Y) :- mother(X, Y), female(X).
 
+% Derive father/mother:
+father(X, Y) :- parent(X, Y), male(X).
+mother(X, Y) :- parent(X, Y), female(X).
 
 % Children and gendered children (only derive from parent facts)
 child(X, Y)    :- parent(Y, X).
@@ -52,9 +50,9 @@ brother(X, Y) :- male(X), sibling(X, Y).
 sister(X, Y)  :- female(X), sibling(X, Y).
 
 % Core sibling logic: shared parent or explicitly declared
-sibling(X, Y) :-
-    (sibling_fact(X, Y); sibling_fact(Y, X));
-    (parent(Z, X), parent(Z, Y), X \= Y).
+sibling(X, Y) :- sibling_fact(X, Y).
+sibling(X, Y) :- sibling_fact(Y, X).
+sibling(X, Y) :- parent(Z, X), parent(Z, Y), X \= Y.
 
 % Transitive sibling relation
 related_sibling(X, Y) :- related_sibling(X, Y, []).

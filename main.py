@@ -21,16 +21,12 @@ def contradicts(fact_type, a, b):
 
     # Forbidden reverse relationships
     contradictions = {
-        "father": [f"father({a},{b})"],
-        "mother": [f"mother({a},{b})"],
-        "parent": [f"parent({a},{b})"],
-        "grandfather": [f"grandfather({a},{b})"],
-        "grandmother": [f"grandmother({a},{b})"],
-        "child": [f"child({b},{a})"],
-        "son": [f"son({b},{a})"],
-        "daughter": [f"daughter({b},{a})"],
-        "uncle": [f"parent({a},{b})", f"father({a},{b})", f"mother({a},{b})"], 
-        "aunt": [f"parent({a},{b})", f"father({a},{b})", f"mother({a},{b})"],
+        "father": [f"mother({a},{b})", f"female({a})"],
+        "mother": [f"father({a},{b})", f"male({a})"],
+        "son": [f"daughter({a},{b})", f"female({a})"],
+        "daughter": [f"son({a},{b})", f"male({a})"],
+        "uncle": [f"aunt({a},{b})", f"female({a})"],
+        "aunt": [f"uncle({a},{b})", f"male({a})"],
     }
 
     for contradiction in contradictions.get(fact_type, []):
@@ -119,12 +115,14 @@ def handle_statement(text):
             a, b = words[0], words[-1]
             add_fact("daughter", a, b)
             add_fact("child", a, b)
+            add_fact("parent", b, a)
             add_fact("female", a)
 
         elif "is a son of" in text:
             a, b = words[0], words[-1]
             add_fact("son", a, b)
             add_fact("child", a, b)
+            add_fact("parent", b, a)
             add_fact("male", a)
 
         elif "is an aunt of" in text:
