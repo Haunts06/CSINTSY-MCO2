@@ -3,7 +3,7 @@ from pyswip import Prolog
 prolog = Prolog()
 prolog.consult("db.pl")  # Make sure your db.pl is in the same folder
 
-print("👋 Welcome to the FamilyBot!")
+print("Welcome to the FamilyBot!")
 print("You can enter statements like: 'John is the father of Mark.'")
 print("Or ask questions like: 'Is John the grandfather of Mark?'\n")
 
@@ -19,42 +19,29 @@ def fact_exists(fact):
 def contradicts(fact_type, a, b):
     a, b = format(a), format(b)
 
-    # Direct contradiction map
-    inverse = {
-        "father": f"father({b},{a})",
-        "mother": f"mother({b},{a})",
-        "parent": f"parent({b},{a})",
-        "grandfather": f"grandfather({b},{a})",
-        "grandmother": f"grandmother({b},{a})",
-        "child": f"parent({a},{b})",
-        "son": f"parent({a},{b})",
-        "daughter": f"parent({a},{b})",
+    # Forbidden reverse relationships
+    contradictions = {
+        "father": [f"father({a},{b})"],
+        "mother": [f"mother({a},{b})"],
+        "parent": [f"parent({a},{b})"],
+        "grandfather": [f"grandfather({a},{b})"],
+        "grandmother": [f"grandmother({a},{b})"],
+        "child": [f"child({b},{a})"],
+        "son": [f"son({b},{a})"],
+        "daughter": [f"daughter({b},{a})"],
+        "uncle": [f"parent({a},{b})", f"father({a},{b})", f"mother({a},{b})"], 
+        "aunt": [f"parent({a},{b})", f"father({a},{b})", f"mother({a},{b})"],
     }
 
-    # Direct role conflict
-    if fact_type in inverse and fact_exists(inverse[fact_type]):
-        return True
-
-    # Cross-role contradiction: can't be uncle/aunt of your parent
-    if fact_type in ["father", "mother", "parent"]:
-        if fact_exists(f"uncle({b},{a})") or fact_exists(f"aunt({b},{a})"):
+    for contradiction in contradictions.get(fact_type, []):
+        if fact_exists(contradiction):
             return True
 
-    if fact_type in ["uncle", "aunt"]:
-        if fact_exists(f"parent({b},{a})") or fact_exists(f"father({b},{a})") or fact_exists(f"mother({b},{a})"):
+    if fact_type in ["uncle", "aunt", "grandfather", "grandmother"]:
+        if fact_exists(f"ancestor({b},{a})"):
             return True
-
-    # Transitive ancestor check
-    # e.g. if A is parent of B, B should not be uncle/aunt/grandparent of A
-    # Use recursive Prolog queries for general ancestor relation
-    ancestor_query = f"ancestor({b},{a})"  # Is B already ancestor of A?
-    if fact_type in ["uncle", "aunt", "grandfather", "grandmother"] and fact_exists(f"parent({a},{b})"):
-        return True
-    if fact_type in ["uncle", "aunt", "grandfather", "grandmother"] and fact_exists(ancestor_query):
-        return True
 
     return False
-
 
 
 def add_fact(fact_type, a, b, extras=[]):
@@ -62,14 +49,18 @@ def add_fact(fact_type, a, b, extras=[]):
     if contradicts(fact_type, a, b):
         print(f"Contradiction: {b} cannot be the {fact_type} of {a}.")
         return
+    
     base_fact = f"{fact_type}({a},{b})"
     if fact_exists(base_fact):
         print("Already known.")
         return
+    
     prolog.assertz(base_fact)
     for ef in extras:
         prolog.assertz(ef)
-    print(f"Added: {base_fact}")
+
+    print(f"Learned: {base_fact}")
+
 
 def handle_statement(text):
     text = text.strip('.').strip()
@@ -77,24 +68,28 @@ def handle_statement(text):
     try:
         if "are siblings" in text:
             a, b = words[0], words[2]
-            add_fact("sibling", a, b)
-            add_fact("sibling", b, a)
+            add_fact("sibling_fact", a, b)
+            add_fact("sibling_fact", b, a)
 
         elif "is a sister of" in text:
             a, b = words[0], words[-1]
-            add_fact("sister", a, b, [f"female({format(a)})"])
+            add_fact("sibling_fact", a, b, [f"female({format(a)})"])
 
         elif "is a brother of" in text:
             a, b = words[0], words[-1]
-            add_fact("brother", a, b, [f"male({format(a)})"])
+            add_fact("sibling_fact", a, b, [f"male({format(a)})"])
 
-        elif "is the father of" in text:
-            a, b = words[0], words[-1]
-            add_fact("father", a, b, [f"parent({a},{b})", f"male({a})"])
+        elif " is the father of " in text:
+            parts = text.split(" is the father of ")
+            if len(parts) == 2:
+                a, b = format(parts[0]), format(parts[1])
+                add_fact("parent", a, b, [f"father({format(a)},{format(b)})"])
 
-        elif "is the mother of" in text:
-            a, b = words[0], words[-1]
-            add_fact("mother", a, b, [f"parent({a},{b})", f"female({a})"])
+        elif " is the mother of " in text:
+            parts = text.split(" is the mother of ")
+            if len(parts) == 2:
+                a, b = format(parts[0]), format(parts[1])
+                add_fact("parent", a, b, [f"mother({format(a)},{format(b)})"])
 
         elif "are the parents of" in text:
             a, b, c = words[0], words[2], words[-1]
@@ -103,11 +98,11 @@ def handle_statement(text):
 
         elif "is a grandfather of" in text:
             a, b = words[0], words[-1]
-            add_fact("grandfather", a, b, [f"male({format(a)})"])
+            add_fact("grandfather", a, b, [f"grandparent({format(a)},{format(b)})"])
 
         elif "is a grandmother of" in text:
             a, b = words[0], words[-1]
-            add_fact("grandmother", a, b, [f"female({format(a)})"])
+            add_fact("grandmother", a, b, [f"grandparent({format(a)},{format(b)})"])
 
         elif "are children of" in text:
             a, b, c = words[0], words[2], words[-1]
@@ -116,11 +111,11 @@ def handle_statement(text):
 
         elif "is a daughter of" in text:
             a, b = words[0], words[-1]
-            add_fact("daughter", a, b, [f"female({format(a)})"])
+            add_fact("daughter", a, b, [f"child({format(a)},{format(b)})",f"female({format(a)})"])
 
         elif "is a son of" in text:
             a, b = words[0], words[-1]
-            add_fact("son", a, b, [f"male({format(a)})"])
+            add_fact("son", a, b, [f"child({format(a)},{format(b)})", f"male({format(a)})"])
 
         elif "is an aunt of" in text:
             a, b = words[0], words[-1]
@@ -131,26 +126,200 @@ def handle_statement(text):
             add_fact("uncle", a, b, [f"male({format(a)})"])
 
         else:
-            print("❌ Statement not recognized. Try a valid format.")
+            print("Statement invalid.")
     except:
-        print("⚠️ Couldn't parse the statement properly.")
+        print("Could not parse statement. Please use the correct format.")
+
+def conflicting_gender(name):
+    return fact_exists(f"male({name})") and fact_exists(f"female({name})")
 
 def handle_question(text):
     try:
         text = text.strip("?").strip()
-        if text.lower().startswith("is "):
-            parts = text[3:].split(" the ")
-            a = format(parts[0])
-            rel, b = parts[1].split(" of ")
-            rel = format(rel)
-            b = format(b)
-            query = f"{rel}({a},{b})"
-            if fact_exists(query):
-                print("Yes.")
+
+        # Pattern 1: Is ___ a/an ___ of ___? / Is ___ the ___ of ___?
+        if text.lower().startswith("is ") and (" a " in text or " an " in text or " the " in text):
+            capture = text[3:]
+            determiner = None
+            if " the " in capture:
+                determiner = " the "
+            elif " a " in capture:
+                determiner = " a "
+            elif " an " in capture:
+                determiner = " an "
+
+            if determiner is None:
+                print("Question format not recognized.")
+                return
+
+            parts = capture.split(determiner)
+            if len(parts) == 2 and " of " in parts[1]:
+                a = format(parts[0])
+                rel, b = parts[1].split(" of ")
+                rel = format(rel)
+                b = format(b)
+                query = f"{rel}({a},{b})"
+                print("Yes.") if fact_exists(query) else print("No.")
+
+
+        # Pattern 2: Who are the siblings/sisters/brothers/daughters/sons/children of ___?
+        elif text.lower().startswith("who are the"):
+            lowered = text.lower().rstrip("?")
+            roles = ["siblings", "sisters", "brothers", "daughters", "sons", "children", "parents"]
+
+            role_matched = next((role for role in roles if role in lowered), None)
+            if not role_matched:
+                print("Please ask about siblings, sisters, brothers, daughters, sons, or children.")
+                return
+
+            try:
+                name_part = lowered.split(f"the {role_matched} of")[1].strip()
+                name = format(name_part)
+
+                # Map the query roles to Prolog predicates
+                role_to_predicate = {
+                    "siblings": "related_sibling",
+                    "sisters": "sister",
+                    "brothers": "brother",
+                    "daughters": "daughter",
+                    "sons": "son",
+                    "children": "child",
+                    "parents": "parent"
+                }
+
+                pred = role_to_predicate[role_matched]
+                results = list(prolog.query(f"{pred}(X, {name})"))
+
+                others = sorted(set(res['X'] for res in results if res['X'] != name))
+
+                if others:
+                    print(f"{name.capitalize()}'s {role_matched} are: {', '.join(others)}.")
+                else:
+                    print(f"{name.capitalize()} has no known {role_matched}.")
+            except Exception:
+                print(f"Please follow the format: 'Who are the {role_matched} of <Name>?'.")
+
+
+        # Pattern 3: Are ___ and ___ siblings/relatives?
+        elif text.lower().startswith("are ") and ("sibling" in text.lower() or "relative" in text.lower()):
+            lowered = text.lower().rstrip("?")
+            
+            relation = "sibling" if "sibling" in lowered else "relative"
+            capture = lowered.split(relation)[0][4:].strip()
+            
+            if " and " in capture:
+                names = capture.split(" and ")
+            elif " & " in capture:
+                names = capture.split(" & ")
             else:
-                print("No.")
-        else:
-            print("⚠️ Use 'Is X the Y of Z?' format.")
+                print("Please use 'and' or '&' to separate two names.")
+                return
+
+            if len(names) != 2:
+                print("Please provide exactly two names.")
+                return
+
+            a, b = format(names[0].strip()), format(names[1].strip())
+
+            relation_query = {
+                "sibling": [f"related_sibling({a}, {b})", f"related_sibling({b}, {a})"],
+                "relative": [f"relative({a}, {b})", f"relative({b}, {a})"]
+            }
+
+            if any(fact_exists(q) for q in relation_query[relation]):
+                print(f"Yes, {names[0]} and {names[1]} are {relation}s.")
+            else:
+                print(f"No, {names[0]} and {names[1]} are not {relation}s.")
+
+
+        # Pattern 4: Are ___ and ___ the parents of ___?
+        elif text.lower().startswith("are") and ("parents of" in text.lower() or "the parents of" in text.lower()):
+            try:
+                lowered = text.lower().rstrip("?").replace("the parents of", "parents of")
+                capture = lowered[4:].strip()
+
+                parents_part, child_part = capture.split("parents of")
+                parent1, parent2 = [p.strip().lower() for p in parents_part.split("and")]
+                child = child_part.strip().lower()
+
+                a = format(parent1)
+                b = format(parent2)
+                c = format(child)
+
+                # Direct query
+                q1 = list(prolog.query(f"parent({c}, {a})"))
+                q2 = list(prolog.query(f"parent({c}, {b})"))
+
+                # Fallback: try if child relation implies parent
+                if not q1:
+                    q1 = list(prolog.query(f"child({a}, {c})"))
+                    print("Fallback used for first parent")
+
+                if not q2:
+                    q2 = list(prolog.query(f"child({b}, {c})"))
+                    print("Fallback used for second parent")
+
+                if q1 and q2:
+                    print(f"Yes, {parent1} and {parent2} are parents of {child}.")
+                else:
+                    print(f"No, {parent1} and {parent2} are not parents of {child}.")
+
+            except Exception as e:
+                print("Error parsing input:", e)
+
+
+        # Pattern 5: Who is the mother/father of ___?
+        elif text.lower().startswith("who is the ") and " of " in text.lower():
+            lowered = text.lower().rstrip("?")
+            roles = ["mother", "father"]
+
+            role_matched = next((role for role in roles if role in lowered), None)
+            if not role_matched:
+                print("Please ask about the mother or father.")
+                return
+
+            try:
+                name_part = lowered.split(f"the {role_matched} of")[1].strip()
+                name = format(name_part)
+
+                # Build the Prolog query like: mother(X, john)
+                query = f"{role_matched}(X, {name})"
+                results = list(prolog.query(query))
+
+                parents = sorted(set(res['X'] for res in results if res['X'] != name))
+
+                if parents:
+                    print(f"{name.capitalize()}'s {role_matched} is: {parents[0]}.")
+                else:
+                    print(f"{name.capitalize()} has no known {role_matched}.")
+            except Exception:
+                print(f"Please follow the format: 'Who is the {role_matched} of <Name>?'.")
+
+        # Pattern 6: Are ___, ___ and ___ children of ___?
+        elif text.lower().startswith("are ") and " children of " in text.lower():
+            try:
+                lowered = text.lower().replace("?", "")
+                parts = lowered.split(" children of ")
+                people_part = parts[0].replace("are", "").strip()
+                parent = format(parts[1].strip())
+                
+                tokens = people_part.replace(" and ", ",").split(",")
+                children = [format(token.strip()) for token in tokens if token.strip()]
+
+                all_match = True
+                for child in children:
+                    results = list(prolog.query(f"child({child}, {parent})"))
+                    if not results:
+                        all_match = False
+                        break
+
+                if all_match:
+                    print(f"Yes, {', '.join(children)} are all children of {parent.capitalize()}.")
+                else:
+                    print(f"No, not all of them are children of {parent.capitalize()}.")
+            except Exception:
+                print("Please follow the format: Are <name1>, <name2> and <name3> children of <Parent>?")
+        
     except:
         print("Question format error.")
 
