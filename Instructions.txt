@@ -1,0 +1,17 @@
+Prerequisites 
+
+- Install Python 3.x 
+
+- Import pyswip library 
+
+- SWI-Prolog installed 
+
+Running FamilyBot 
+
+- Open a terminal in the project directory. 
+
+- Run “python main.py” 
+
+- Interact by typing statements ending with `.` or questions ending with `?`. 
+
+- Type “exit” to quit. 
